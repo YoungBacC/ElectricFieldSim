@@ -52,7 +52,22 @@ int main() {
   PointCharge elec;
   allCharges.push_back(&elec);
   elec.circle.setFillColor(ELEC_COLOR);
-  elec.circle.setPosition(sf::Vector2f(40, 300));
+  elec.circle.setPosition(sf::Vector2f(160, 300));
+  elec.charge = -e;
+
+  PointCharge elec1;
+  allCharges.push_back(&elec1);
+  elec1.circle.setFillColor(ELEC_COLOR);
+  elec1.circle.setPosition(sf::Vector2f(320, 300));
+  elec1.charge = -e;
+  
+  PointCharge elec2;
+  allCharges.push_back(&elec2);
+  elec2.circle.setFillColor(ELEC_COLOR);
+  elec2.circle.setPosition(sf::Vector2f(480, 300));
+  elec2.charge = -e;
+
+  
 
   Observer obs;
   obs.circle.setFillColor(sf::Color::White);
@@ -62,7 +77,7 @@ int main() {
 
   // boolean variables
   bool clickedCharge = false;
-
+  PointCharge *chargeCurr = nullptr;
   // main loop
   while (window.isOpen()) {
     sf::Vector2f fieldAtObs = fieldCalc(allCharges, obs);
@@ -75,7 +90,7 @@ int main() {
       }
 
       if (event.type == sf::Event::MouseButtonPressed) {
-        PointCharge *chargeCurr;
+       
         if (isMouseOnCharge(allCharges, window, chargeCurr)) {
           clickedCharge = true;
         } else {
@@ -84,7 +99,7 @@ int main() {
       }
 
       if (clickedCharge) {
-        lockChargeToMouse(elec, window, event);
+        lockChargeToMouse(*chargeCurr, window, event);
       }
     }
 
@@ -99,6 +114,8 @@ int main() {
     window.draw(text);
     window.draw(obs.circle);
     window.draw(elec.circle);
+    window.draw(elec1.circle);
+    window.draw(elec2.circle);
     window.draw(line);
 
     window.display();
@@ -126,7 +143,7 @@ sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc,
 
     float fieldMagWithSign = k * (i->charge / pow(dist, 2));
 
-    fieldVector += fieldMagWithSign * unit * float(pow(10,-8));
+    fieldVector += fieldMagWithSign * unit * float(pow(10,15));
   }
   return fieldVector;
 }
@@ -153,11 +170,11 @@ float vecMag(const sf::Vector2f &vec) {
 bool isMouseOnCharge(const std::vector<PointCharge*> &pc, const sf::RenderWindow &win, PointCharge* pcCurr) {
   for (auto i : pc) {
     // get vector between mouse pos and center of point charge
-    sf::Vector2 vec =
-        getCircleMid(i->circle) - sf::Vector2f(sf::Mouse::getPosition(win));
+    sf::Vector2 vec = getCircleMid(i->circle) - sf::Vector2f(sf::Mouse::getPosition(win));
 
     // if mag of vector is within the radius, return true
     if (vecMag(vec) < RADIUS) {
+      pcCurr = i;
       return true;
     }
   }
@@ -167,7 +184,6 @@ bool isMouseOnCharge(const std::vector<PointCharge*> &pc, const sf::RenderWindow
 void lockChargeToMouse(PointCharge &charge, const sf::RenderWindow &window,
                        const sf::Event &event) {
   if (event.type == sf::Event::MouseMoved) {
-    charge.circle.setPosition(
-        window.mapPixelToCoords(sf::Mouse::getPosition(window)));
+    charge.circle.setPosition(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
   }
 }
