@@ -15,15 +15,13 @@ struct Observer {
 };
 
 // function definitions
-sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc,
-                       const Observer &obs);
-void normalizeVec(sf::Vector2f &vec);
+sf::Vector2f fieldCalc(const std::vector<PointCharge *>&, const Observer&);
+void normalizeVec(sf::Vector2f&);
 sf::Vector2f getCircleMid(const sf::CircleShape &);
-bool isMouseOnCharge(const std::vector<PointCharge*> &, const sf::RenderWindow &,
-                     PointCharge*);
+bool isMouseOnCharge(const std::vector<PointCharge*> &, const sf::RenderWindow &, PointCharge*&);
 float vecMag(const sf::Vector2f &);
-void lockChargeToMouse(PointCharge &, const sf::RenderWindow &,
-                       const sf::Event &);
+void lockChargeToMouse(PointCharge* , const sf::RenderWindow &, const sf::Event &);
+void drawField(const std::vector<PointCharge *>&, sf::RenderWindow&, Observer&);
 
 // const variables
 const float e = 1.602 * pow(10, -19);
@@ -77,7 +75,9 @@ int main() {
 
   // boolean variables
   bool clickedCharge = false;
-  PointCharge *chargeCurr = nullptr;
+  PointCharge* chargeCurr = nullptr; 
+
+
   // main loop
   while (window.isOpen()) {
     sf::Vector2f fieldAtObs = fieldCalc(allCharges, obs);
@@ -99,7 +99,7 @@ int main() {
       }
 
       if (clickedCharge) {
-        lockChargeToMouse(*chargeCurr, window, event);
+        lockChargeToMouse(chargeCurr, window, event);
       }
     }
 
@@ -107,16 +107,14 @@ int main() {
     window.setActive();
     window.clear();
 
-    // update lines
-    line[0].position = getCircleMid(obs.circle);
-    line[1].position = getCircleMid(obs.circle) + fieldAtObs;
 
     window.draw(text);
     window.draw(obs.circle);
     window.draw(elec.circle);
     window.draw(elec1.circle);
     window.draw(elec2.circle);
-    window.draw(line);
+
+    drawField(allCharges, window, obs);
 
     window.display();
   }
@@ -124,8 +122,7 @@ int main() {
   return 0;
 }
 
-sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc,
-                       const Observer &obs) {
+sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc, const Observer &obs) {
   float k = 8.99 * pow(10,9);
 
   sf::Vector2f fieldVector;
@@ -145,6 +142,7 @@ sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc,
 
     fieldVector += fieldMagWithSign * unit * float(pow(10,15));
   }
+
   return fieldVector;
 }
 
@@ -167,7 +165,7 @@ float vecMag(const sf::Vector2f &vec) {
 }
 
 // checks if the mouse pos is within the radius of the point charge
-bool isMouseOnCharge(const std::vector<PointCharge*> &pc, const sf::RenderWindow &win, PointCharge* pcCurr) {
+bool isMouseOnCharge(const std::vector<PointCharge*> &pc, const sf::RenderWindow &win, PointCharge*& pcCurr) {
   for (auto i : pc) {
     // get vector between mouse pos and center of point charge
     sf::Vector2 vec = getCircleMid(i->circle) - sf::Vector2f(sf::Mouse::getPosition(win));
@@ -181,9 +179,36 @@ bool isMouseOnCharge(const std::vector<PointCharge*> &pc, const sf::RenderWindow
   return false;
 }
 
-void lockChargeToMouse(PointCharge &charge, const sf::RenderWindow &window,
-                       const sf::Event &event) {
+void lockChargeToMouse(PointCharge* charge, const sf::RenderWindow &window, const sf::Event &event) {
   if (event.type == sf::Event::MouseMoved) {
-    charge.circle.setPosition(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
+    charge->circle.setPosition(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
+  }
+}
+
+void drawField(const std::vector<PointCharge *>& pc, sf::RenderWindow& window, Observer& obs){
+
+  //get window size for the loop
+  sf::Vector2u windowSize = window.getSize();
+
+  //for the vector lines
+  sf::VertexArray vecLines(sf::Lines, 2);
+
+  for(int i = 50; i <= windowSize.y; i+=20){
+    for(int j = 0; j <= windowSize.x; j+=20){
+      
+      //move the observer to j,i
+      obs.circle.setPosition(sf::Vector2f(j,i)); 
+
+      //calculate field at j,i
+      sf::Vector2f field = fieldCalc(pc, obs);
+
+      normalizeVec(field);
+      field *= 20.f;
+
+      vecLines[0].position = obs.circle.getPosition();
+      vecLines[1].position = obs.circle.getPosition() + field;
+
+      window.draw(vecLines);
+    }
   }
 }
