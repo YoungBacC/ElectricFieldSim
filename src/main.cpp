@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <cmath>
+#include<string>
 #include <iostream>
 #include <vector>
 
@@ -17,14 +18,17 @@ struct Observer {
 struct Button{
   sf::RectangleShape rect; 
   sf::Text buttonText;
+  std::string tag;
 
   //constructor
-  Button(sf::Vector2f pos, std::string text, sf::Font font, float fontSize){
-    rect = sf::RectangleShape(sf::Vector2f(60, 30));
+  Button(const sf::Vector2f& pos, const std::string& text, const sf::Font& font, float fontSize, std::string t){
+    tag = t;
+    rect = sf::RectangleShape(sf::Vector2f(100, 40));
     rect.setPosition(pos);
     rect.setFillColor(sf::Color::Green);
-    buttonText = sf::Text(text, font, fontSize);
-    buttonText.setFillColor(sf::Color::White);
+    buttonText = sf::Text(text, font);
+    buttonText.setCharacterSize(fontSize);
+    buttonText.setFillColor(sf::Color::Black);
 
     sf::FloatRect textBounds = buttonText.getLocalBounds();
 
@@ -58,6 +62,7 @@ const sf::Color PRO_COLOR = sf::Color::Blue;
 
 int main() {
   std::vector<PointCharge *> allCharges;
+  std::vector<Button *> allButtons;
 
   // main window
   sf::RenderWindow window(sf::VideoMode(1000, 800), "My Window");
@@ -75,7 +80,10 @@ int main() {
   text.setPosition(textMidToScreenMid, 10);
 
   //define buttons here
-  Button addCharge(sf::Vector2f(10,10), "Add Charge", font, 30);
+  Button addElecButton(sf::Vector2f(10,10), "Add Electron", font, 13);
+  Button addProButton(sf::Vector2f(890, 10), "Add Proton", font, 13);
+  allButtons.push_back(&addElecButton);
+  allButtons.push_back(&addProButton);
 
 
   // define charges here:
@@ -144,10 +152,7 @@ int main() {
     window.setActive();
     window.clear();
 
-    //drawButton
-    addCharge.draw(window);
-
-    //draw text
+       //draw text
     window.draw(text);
 
     //update field every frame
@@ -159,6 +164,12 @@ int main() {
     {
       window.draw(i->circle);
     }
+    
+    //draw buttons
+    addElecButton.draw(window);
+    addProButton.draw(window);
+
+
 
     window.display();
   }
