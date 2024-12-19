@@ -1,14 +1,33 @@
 #include <SFML/Graphics.hpp>
 #include <cmath>
 #include<string>
-#include <iostream>
 #include <vector>
 
-const unsigned RADIUS = 7;
+// const variables
+const float e = 1.602 * pow(10, -19);
+const sf::Color ELEC_COLOR = sf::Color::Red;
+const sf::Color PRO_COLOR = sf::Color::Blue;
+const unsigned RADIUS = 9;
+const std::string ELEC_TYPE = "electron";
+const std::string PROT_TYPE = "proton";
 
 struct PointCharge {
   float charge;
-  sf::CircleShape circle = sf::CircleShape(RADIUS, 30);
+  sf::CircleShape circle;
+
+  PointCharge(sf::Vector2f pos, std::string type){
+    if(type == ELEC_TYPE){
+      charge = -e;
+      circle.setFillColor(sf::Color::Red);
+    }
+    else if(type == PROT_TYPE){
+      charge = e;
+      circle.setFillColor(sf::Color::Blue);
+    }
+
+    circle.setRadius(RADIUS);
+    circle.setPosition(pos);
+  }
 };
 
 struct Observer {
@@ -47,18 +66,15 @@ struct Button{
 };
 
 // function definitions
-sf::Vector2f fieldCalc(const std::vector<PointCharge *>&, const Observer&);
+sf::Vector2f fieldCalc(const std::vector<PointCharge *>&, const Observer&, float&);
 void normalizeVec(sf::Vector2f&);
 sf::Vector2f getCircleMid(const sf::CircleShape &);
 bool isMouseOnCharge(const std::vector<PointCharge*> &, const sf::RenderWindow &, PointCharge*&);
 float vecMag(const sf::Vector2f &);
 void lockChargeToMouse(PointCharge* , const sf::RenderWindow &, const sf::Event &);
-void drawField(const std::vector<PointCharge *>&, sf::RenderWindow&, Observer&);
-
-// const variables
-const float e = 1.602 * pow(10, -19);
-const sf::Color ELEC_COLOR = sf::Color::Red;
-const sf::Color PRO_COLOR = sf::Color::Blue;
+void drawField(const std::vector<PointCharge *> &, sf::RenderWindow&, Observer&);
+bool isMouseOnButton(const std::vector<Button *> &, const sf::RenderWindow &, std::string &);
+void addCharge(const std::string, std::vector<PointCharge *> &);
 
 int main() {
   std::vector<PointCharge *> allCharges;
@@ -80,37 +96,12 @@ int main() {
   text.setPosition(textMidToScreenMid, 10);
 
   //define buttons here
-  Button addElecButton(sf::Vector2f(10,10), "Add Electron", font, 13);
-  Button addProButton(sf::Vector2f(890, 10), "Add Proton", font, 13);
+  Button addElecButton(sf::Vector2f(10,10), "Add Electron", font, 13, ELEC_TYPE);
+  Button addProButton(sf::Vector2f(890, 10), "Add Proton", font, 13, PROT_TYPE);
+  Button trash(sf::Vector2f(890, 750), "Trash", font, 13, "trash");
   allButtons.push_back(&addElecButton);
   allButtons.push_back(&addProButton);
-
-
-  // define charges here:
-  PointCharge elec;
-  allCharges.push_back(&elec);
-  elec.circle.setFillColor(ELEC_COLOR);
-  elec.circle.setPosition(sf::Vector2f(160, 300));
-  elec.charge = -e;
-
-  PointCharge elec1;
-  allCharges.push_back(&elec1);
-  elec1.circle.setFillColor(ELEC_COLOR);
-  elec1.circle.setPosition(sf::Vector2f(320, 300));
-  elec1.charge = -e;
-  
-  PointCharge elec2;
-  allCharges.push_back(&elec2);
-  elec2.circle.setFillColor(ELEC_COLOR);
-  elec2.circle.setPosition(sf::Vector2f(480, 300));
-  elec2.charge = -e;
-
-  PointCharge proton;
-  allCharges.push_back(&proton);
-  proton.circle.setFillColor(PRO_COLOR);
-  proton.circle.setPosition(sf::Vector2f(400, 500));
-  proton.charge = 1;
-  
+  allButtons.push_back(&trash);
 
   Observer obs;
   obs.circle.setFillColor(sf::Color::White);
@@ -120,13 +111,16 @@ int main() {
 
   // boolean variables
   bool clickedCharge = false;
+  bool clickedButton = false;
+
+
   PointCharge* chargeCurr = nullptr; 
+  std::string buttonTag; 
+
 
 
   // main loop
   while (window.isOpen()) {
-    sf::Vector2f fieldAtObs = fieldCalc(allCharges, obs);
-
     // process events
     sf::Event event;
     while (window.pollEvent(event)) {
@@ -134,17 +128,37 @@ int main() {
         window.close();
       }
 
+      if(isMouseOnButton(allButtons, window, buttonTag)){
+        if(event.type == sf::Event::MouseButtonPressed){
+          clickedButton = true;
+        }
+        else{
+          clickedButton = false;
+        }
+      }
+
       if (event.type == sf::Event::MouseButtonPressed) {
        
         if (isMouseOnCharge(allCharges, window, chargeCurr)) {
           clickedCharge = true;
-        } else {
+        }
+        else {
           clickedCharge = false;
         }
       }
 
       if (clickedCharge) {
         lockChargeToMouse(chargeCurr, window, event);
+        if(isMouseOnButton(allButtons, window, buttonTag) && buttonTag == "trash")
+        {
+          allCharges.erase(std::find(allCharges.begin(), allCharges.end(), chargeCurr));
+          delete chargeCurr;
+          chargeCurr = nullptr;
+          clickedCharge = false;
+        }
+      }
+      else if(clickedButton){
+        addCharge(buttonTag, allCharges);
       }
     }
 
@@ -158,17 +172,17 @@ int main() {
     //update field every frame
     drawField(allCharges, window, obs);
 
+    for(auto i : allButtons)
+    {
+      i->draw(window);
+    }
 
     //draw all charges every frame
     for(auto i : allCharges)
     {
       window.draw(i->circle);
     }
-    
-    //draw buttons
-    addElecButton.draw(window);
-    addProButton.draw(window);
-
+ 
 
 
     window.display();
@@ -177,7 +191,7 @@ int main() {
   return 0;
 }
 
-sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc, const Observer &obs) {
+sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc, const Observer &obs, float &strength) {
   float k = 8.99 * pow(10,9);
 
   sf::Vector2f fieldVector;
@@ -194,9 +208,11 @@ sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc, const Observer &obs
     normalizeVec(unit);
 
     float fieldMagWithSign = k * (i->charge / pow(dist, 2));
-
-    fieldVector += fieldMagWithSign * unit * float(pow(10,15));
+    
+    fieldVector += fieldMagWithSign * unit;
   }
+
+  strength = vecMag(fieldVector);
 
   return fieldVector;
 }
@@ -231,6 +247,7 @@ bool isMouseOnCharge(const std::vector<PointCharge*> &pc, const sf::RenderWindow
       return true;
     }
   }
+  pcCurr = nullptr;
   return false;
 }
 
@@ -248,22 +265,80 @@ void drawField(const std::vector<PointCharge *>& pc, sf::RenderWindow& window, O
   //for the vector lines
   sf::VertexArray vecLines(sf::Lines, 2);
 
-  for(int i = 80; i <= windowSize.y; i+=10){
-    for(int j = 0; j <= windowSize.x; j+=10){
+  float relativeStrength;
+
+  float proConst = 3.922 * pow(10, -16);
+
+  float alpha;
+
+  for(int i = 80; i <= windowSize.y; i+=20){
+    for(int j = 0; j <= windowSize.x; j+=20){
       
       //move the observer to j,i
       obs.circle.setPosition(sf::Vector2f(j,i)); 
 
       //calculate field at j,i
-      sf::Vector2f field = fieldCalc(pc, obs);
+      sf::Vector2f field = fieldCalc(pc, obs, relativeStrength);
 
       normalizeVec(field);
-      field *= 12.f;
+      field *= 15.f;
 
       vecLines[0].position = getCircleMid(obs.circle);
       vecLines[1].position = getCircleMid(obs.circle) + field;
 
+      alpha = relativeStrength / proConst;
+
+      if(alpha > 255){
+        alpha = 255;
+      }
+
+      vecLines[0].color = sf::Color::Red;
+      vecLines[1].color = sf::Color::Blue;
+
+      vecLines[0].color.a = alpha; 
+      vecLines[1].color.a = alpha; 
+
       window.draw(vecLines);
     }
+  }
+}
+
+bool isMouseOnButton(const std::vector<Button *> & but, const sf::RenderWindow & win, std::string & butCurr){
+  
+  //check if mouse is on a button
+  for(auto i : but){
+    sf::FloatRect bound = i->rect.getGlobalBounds();
+
+    float x1 = bound.left;
+    float x2 = bound.left + bound.width;
+
+    float y1 = bound.top;
+    float y2 = bound.top + bound.height;
+
+    bool inX = sf::Mouse::getPosition(win).x > x1 && sf::Mouse::getPosition(win).x < x2;
+    bool inY = sf::Mouse::getPosition(win).y > y1 && sf::Mouse::getPosition(win).y < y2;
+
+    if(inX && inY){
+        i->rect.setFillColor(sf::Color::Cyan);
+        butCurr = i->tag;
+        return true;
+      }
+    else{
+      i->rect.setFillColor(sf::Color::Green);
+    }
+  }
+  return false;
+}
+
+void addCharge(const std::string chargeTag, std::vector<PointCharge *> &pc){
+  
+  if(chargeTag == ELEC_TYPE)
+  {
+    PointCharge* elec = new PointCharge(sf::Vector2f(10, 70), ELEC_TYPE);
+    pc.push_back(elec);
+  }
+  else if(chargeTag == PROT_TYPE){
+    PointCharge* prot = new PointCharge(sf::Vector2f(890, 70), PROT_TYPE);
+    pc.push_back(prot);
   }
 }
