@@ -3,7 +3,7 @@
 #include <iostream>
 #include <vector>
 
-const unsigned RADIUS = 5;
+const unsigned RADIUS = 7;
 
 struct PointCharge {
   float charge;
@@ -12,6 +12,34 @@ struct PointCharge {
 
 struct Observer {
   sf::CircleShape circle = sf::CircleShape(RADIUS, 30);
+};
+
+struct Button{
+  sf::RectangleShape rect; 
+  sf::Text buttonText;
+
+  //constructor
+  Button(sf::Vector2f pos, std::string text, sf::Font font, float fontSize){
+    rect = sf::RectangleShape(sf::Vector2f(60, 30));
+    rect.setPosition(pos);
+    rect.setFillColor(sf::Color::Green);
+    buttonText = sf::Text(text, font, fontSize);
+    buttonText.setFillColor(sf::Color::White);
+
+    sf::FloatRect textBounds = buttonText.getLocalBounds();
+
+    //automatically fit text to button
+    float deltaX = rect.getSize().x / 2.0 - textBounds.width / 2.0 - textBounds.left;
+    float deltaY = rect.getSize().y / 2.0 - textBounds.height / 2.0 - textBounds.top;
+
+    buttonText.setPosition(sf::Vector2f(rect.getPosition().x + deltaX, rect.getPosition().y + deltaY));
+  }
+
+  void draw(sf::RenderWindow& win){
+    win.draw(rect);
+    win.draw(buttonText);
+  }
+
 };
 
 // function definitions
@@ -32,7 +60,7 @@ int main() {
   std::vector<PointCharge *> allCharges;
 
   // main window
-  sf::RenderWindow window(sf::VideoMode(800, 600), "My Window");
+  sf::RenderWindow window(sf::VideoMode(1000, 800), "My Window");
 
   sf::Font font;
 
@@ -45,6 +73,10 @@ int main() {
   sf::Rect textBounds = text.getLocalBounds();
   float textMidToScreenMid = window.getSize().x / 2.0 - textBounds.width / 2.0;
   text.setPosition(textMidToScreenMid, 10);
+
+  //define buttons here
+  Button addCharge(sf::Vector2f(10,10), "Add Charge", font, 30);
+
 
   // define charges here:
   PointCharge elec;
@@ -65,6 +97,11 @@ int main() {
   elec2.circle.setPosition(sf::Vector2f(480, 300));
   elec2.charge = -e;
 
+  PointCharge proton;
+  allCharges.push_back(&proton);
+  proton.circle.setFillColor(PRO_COLOR);
+  proton.circle.setPosition(sf::Vector2f(400, 500));
+  proton.charge = 1;
   
 
   Observer obs;
@@ -107,14 +144,21 @@ int main() {
     window.setActive();
     window.clear();
 
+    //drawButton
+    addCharge.draw(window);
 
+    //draw text
     window.draw(text);
-    window.draw(obs.circle);
-    window.draw(elec.circle);
-    window.draw(elec1.circle);
-    window.draw(elec2.circle);
 
+    //update field every frame
     drawField(allCharges, window, obs);
+
+
+    //draw all charges every frame
+    for(auto i : allCharges)
+    {
+      window.draw(i->circle);
+    }
 
     window.display();
   }
@@ -193,8 +237,8 @@ void drawField(const std::vector<PointCharge *>& pc, sf::RenderWindow& window, O
   //for the vector lines
   sf::VertexArray vecLines(sf::Lines, 2);
 
-  for(int i = 50; i <= windowSize.y; i+=20){
-    for(int j = 0; j <= windowSize.x; j+=20){
+  for(int i = 80; i <= windowSize.y; i+=10){
+    for(int j = 0; j <= windowSize.x; j+=10){
       
       //move the observer to j,i
       obs.circle.setPosition(sf::Vector2f(j,i)); 
@@ -203,10 +247,10 @@ void drawField(const std::vector<PointCharge *>& pc, sf::RenderWindow& window, O
       sf::Vector2f field = fieldCalc(pc, obs);
 
       normalizeVec(field);
-      field *= 20.f;
+      field *= 12.f;
 
-      vecLines[0].position = obs.circle.getPosition();
-      vecLines[1].position = obs.circle.getPosition() + field;
+      vecLines[0].position = getCircleMid(obs.circle);
+      vecLines[1].position = getCircleMid(obs.circle) + field;
 
       window.draw(vecLines);
     }
