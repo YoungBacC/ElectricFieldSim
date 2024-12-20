@@ -75,6 +75,7 @@ void lockChargeToMouse(PointCharge* , const sf::RenderWindow &, const sf::Event 
 void drawField(const std::vector<PointCharge *> &, sf::RenderWindow&, Observer&);
 bool isMouseOnButton(const std::vector<Button *> &, const sf::RenderWindow &, std::string &);
 void addCharge(const std::string, std::vector<PointCharge *> &);
+void drawArrow(const sf::Vector2f &, const sf::Vector2f &, sf::RenderWindow &, float);
 
 int main() {
   std::vector<PointCharge *> allCharges;
@@ -263,7 +264,7 @@ void drawField(const std::vector<PointCharge *>& pc, sf::RenderWindow& window, O
   sf::Vector2u windowSize = window.getSize();
 
   //for the vector lines
-  sf::VertexArray vecLines(sf::Lines, 2);
+  //sf::VertexArray vecLines(sf::Lines, 2);
 
   float relativeStrength;
 
@@ -283,8 +284,8 @@ void drawField(const std::vector<PointCharge *>& pc, sf::RenderWindow& window, O
       normalizeVec(field);
       field *= 15.f;
 
-      vecLines[0].position = getCircleMid(obs.circle);
-      vecLines[1].position = getCircleMid(obs.circle) + field;
+      //vecLines[0].position = getCircleMid(obs.circle);
+      //vecLines[1].position = getCircleMid(obs.circle) + field;
 
       alpha = relativeStrength / proConst;
 
@@ -292,13 +293,15 @@ void drawField(const std::vector<PointCharge *>& pc, sf::RenderWindow& window, O
         alpha = 255;
       }
 
-      vecLines[0].color = sf::Color::Red;
-      vecLines[1].color = sf::Color::Blue;
+      drawArrow(getCircleMid(obs.circle), getCircleMid(obs.circle) + field, window, alpha);
 
-      vecLines[0].color.a = alpha; 
-      vecLines[1].color.a = alpha; 
+      //vecLines[0].color = sf::Color::Red;
+      //vecLines[1].color = sf::Color::Blue;
 
-      window.draw(vecLines);
+      //vecLines[0].color.a = alpha; 
+      //vecLines[1].color.a = alpha; 
+
+      //window.draw(vecLines);
     }
   }
 }
@@ -342,3 +345,45 @@ void addCharge(const std::string chargeTag, std::vector<PointCharge *> &pc){
     pc.push_back(prot);
   }
 }
+
+void drawArrow(const sf::Vector2f & fPos, const sf::Vector2f & sPos, sf::RenderWindow & win, float alpha){
+
+  //make line
+  sf::VertexArray line(sf::Lines, 2);
+
+  line[0].position = fPos;
+  line[1].position = sPos;
+
+  sf::Vector2f dir = sPos - fPos;
+  sf::Vector2f perpDir(-dir.y, dir.x);
+  normalizeVec(perpDir);
+  float triSide = vecMag(dir)/4.0;
+
+  normalizeVec(dir);
+
+
+  sf::Vector2f leftPoint(sPos + (perpDir * float(-triSide/2.0)));
+  sf::Vector2f rightPoint(sPos + (perpDir * float(triSide/2.0)));
+  sf::Vector2f topPoint(sPos + (float(sqrt(3)/2.0 * triSide) * dir));
+  
+  //define arrow head
+  sf::VertexArray head(sf::Triangles, 3);
+
+  head[0].position = leftPoint;
+  head[1].position = rightPoint;
+  head[2].position = topPoint;
+
+  line[0].color = sf::Color::Blue;
+  line[1].color = sf::Color::Red;
+
+  line[0].color.a = alpha;
+  line[1].color.a = alpha;
+
+  head[0].color.a = alpha;
+  head[1].color.a = alpha;
+  head[2].color.a = alpha;
+
+  win.draw(line);
+  win.draw(head);
+}
+
