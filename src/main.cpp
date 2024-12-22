@@ -328,6 +328,12 @@ int main() {
     //update field every frame
     drawField(allStaticCharges, window, obs);
 
+    //draw the path for charges
+    for(auto i : path){
+      window.draw(i);
+    }
+
+
     //draw all buttons
     for(auto i : allButtons)
     {
@@ -343,11 +349,6 @@ int main() {
     //draw all non static charges
     for(auto i : allNonStaticCharges){
       window.draw(i->circle);
-    }
-
-    //draw the path for charges
-    for(auto i : path){
-      window.draw(i);
     }
 
     window.display();
@@ -590,13 +591,34 @@ void handleMechanics(const std::vector<PointCharge* >& staticCharges, std::vecto
   }
 }
 
+//handles the charges staying on screen
 void handleBounds(std::vector<PointCharge *>& pc, const sf::RenderWindow& win){
-  bool isOutOfBounds;
   for(auto i : pc){
-    isOutOfBounds = i->circle.getPosition().x < 0 || i->circle.getPosition().x > win.getSize().x ||
-                     i->circle.getPosition().y < 80 || i->circle.getPosition().y > win.getSize().y;
-    if(isOutOfBounds){
-      i->velocity = sf::Vector2f(-i->velocity.y, i->velocity.x);
+    sf::Vector2f pos = i->circle.getPosition();
+    bool isOutOfX = pos.x < 0 || pos.x > win.getSize().x;
+    bool isOutOfY = pos.y < 80 || pos.y > win.getSize().y;
+
+    //check out of bounds
+    if(isOutOfX){
+      i->velocity.x = -i->velocity.x; 
+
+      //set position to ensure not staying oustide bounds
+      if(pos.x < 0){
+        i->circle.setPosition(sf::Vector2f(0, pos.y));
+      }
+      else{
+        i->circle.setPosition(sf::Vector2f(win.getSize().x, pos.y));
+      }
+    }
+    else if(isOutOfY){
+      i->velocity.y = -i->velocity.y;
+
+      if(pos.y < 80){
+        i->circle.setPosition(sf::Vector2f(pos.x, 80));
+      }
+      else{
+        i->circle.setPosition(sf::Vector2f(pos.x, win.getSize().y));
+      } 
     }
   }
 }
