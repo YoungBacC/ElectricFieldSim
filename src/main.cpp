@@ -91,10 +91,7 @@ struct Button{
     float deltaX = rect.getSize().x / 2.0 - textBounds.width / 2.0 - textBounds.left;
     float deltaY = rect.getSize().y / 2.0 - textBounds.height / 2.0 - textBounds.top;
     buttonText.setPosition(sf::Vector2f(rect.getPosition().x + deltaX, rect.getPosition().y + deltaY));
- 
-
   }
-
 };
 
 // function definitions
@@ -109,7 +106,8 @@ bool isMouseOnButton(const std::vector<Button *> &, const sf::RenderWindow &, st
 void addCharge(const std::string, std::vector<PointCharge *> &, sf::RenderWindow&);
 void drawArrow(const sf::Vector2f &, const sf::Vector2f &, sf::RenderWindow &, float);
 void handleResize(sf::RenderWindow &, sf::View &);
-void handleMechanics(const std::vector<PointCharge* >&, std::vector<PointCharge* >&, const float timeStep);
+void handleMechanics(const std::vector<PointCharge* >&, std::vector<PointCharge* >&, const float timeStep,
+                     std::vector<sf::VertexArray>&);
 void handleBounds(std::vector<PointCharge *>&, const sf::RenderWindow&);
 
 int main() {
@@ -177,13 +175,15 @@ int main() {
   PointCharge* chargeCurr = nullptr; 
   std::string buttonTag; 
 
+  std::vector<sf::VertexArray> path;
+
   // main loop
   while (window.isOpen()) {
 
     handleBounds(allNonStaticCharges, window);
 
     if(isPlaying){
-      handleMechanics(allStaticCharges, allNonStaticCharges, float(1.0/30.0));
+      handleMechanics(allStaticCharges, allNonStaticCharges, float(1.0/30.0), path);
     }
 
     // process events
@@ -217,7 +217,16 @@ int main() {
       }
 
       if (clickedCharge) {
+
+        //if charge is clicked pick it up
         lockChargeToMouse(chargeCurr, window, event);
+
+        //clear path when charge is picked up
+        if(std::find(allNonStaticCharges.begin(), allNonStaticCharges.end(), chargeCurr) != allNonStaticCharges.end()){
+          path.clear();
+        }
+
+        //trash charge if picked up and over trash button
         if(isMouseOnButton(allButtons, window, buttonTag) && buttonTag == "trash")
         {
           if(std::find(allStaticCharges.begin(), allStaticCharges.end(), chargeCurr) != allStaticCharges.end()){
@@ -237,17 +246,24 @@ int main() {
 
         }
       }
+
       else if(clickedButton){
-        if(!isPlayMode && (buttonTag == ELEC_TYPE || buttonTag == PROT_TYPE)){
+
+        //if charge button is clicked while not in test mode then add the charge to the static charges
+        if(!isPlaying && !isPlayMode && (buttonTag == ELEC_TYPE || buttonTag == PROT_TYPE)){
           addCharge(buttonTag, allStaticCharges, window);
           chargeCurr = allStaticCharges.back();
           clickedCharge = true;
         }
+
+        //if we are in test mode then add the charge to the non static charges
         else if(!isPlaying && isPlayMode && (buttonTag == ELEC_TYPE || buttonTag == PROT_TYPE)){
           addCharge(buttonTag, allNonStaticCharges, window);
           chargeCurr = allNonStaticCharges.back();
           clickedCharge = true;
         }
+
+        //clear screen if clear button is pressed
         else if(buttonTag == "clear"){
           for(auto i : allStaticCharges){
             delete i;
@@ -256,9 +272,12 @@ int main() {
             delete i;
           }
 
+          path.clear();
           allStaticCharges.clear();
           allNonStaticCharges.clear();
         }
+
+        //pause and play
         else if(buttonTag == "play pause"){
           isPlaying = !isPlaying;
 
@@ -269,6 +288,8 @@ int main() {
             playPauseButton.setText("Play");
           }
         }
+
+        //change mode button
         else if(buttonTag == "mode"){
           isPlayMode = !isPlayMode;
           if(isPlayMode){
@@ -282,6 +303,7 @@ int main() {
 
       }
 
+      //handle resizing the screen
       if(event.type == sf::Event::Resized){
         handleResize(window, view);
 
@@ -299,13 +321,14 @@ int main() {
     window.setActive();
     window.clear();
 
-       //draw text
+    //draw text
     window.draw(text);
 
     window.draw(topLine);
     //update field every frame
     drawField(allStaticCharges, window, obs);
 
+    //draw all buttons
     for(auto i : allButtons)
     {
       i->draw(window);
@@ -317,8 +340,14 @@ int main() {
       window.draw(i->circle);
     }
 
+    //draw all non static charges
     for(auto i : allNonStaticCharges){
       window.draw(i->circle);
+    }
+
+    //draw the path for charges
+    for(auto i : path){
+      window.draw(i);
     }
 
     window.display();
@@ -530,12 +559,14 @@ void handleResize(sf::RenderWindow& win, sf::View& view){
 
 
 void handleMechanics(const std::vector<PointCharge* >& staticCharges, std::vector<PointCharge* >& movingCharges, 
-                     const float timeStep){
+                     const float timeStep, std::vector<sf::VertexArray>& paths){
   sf::Vector2f force; 
   sf::Vector2f acc; 
   sf::Vector2f field;
   Observer obs;
   float strength;
+
+  sf::VertexArray* path = new sf::VertexArray(sf::Lines, 2);
 
   for(auto i : movingCharges){
     obs.circle.setPosition(i->circle.getPosition());
@@ -549,8 +580,13 @@ void handleMechanics(const std::vector<PointCharge* >& staticCharges, std::vecto
     }
 
     i->velocity = i->velocity + acc * timeStep;
+    (*path)[0].position = getCircleMid(i->circle);
 
     i->circle.setPosition(i->circle.getPosition() + i->velocity * timeStep + acc * float(0.5 * pow(timeStep, 2)));
+
+    (*path)[1].position = getCircleMid(i->circle);
+
+    paths.push_back(*path); 
   }
 }
 
