@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <cmath>
+#include <iostream>
 #include<string>
 #include <vector>
 
@@ -10,12 +11,19 @@ const sf::Color PRO_COLOR = sf::Color::Blue;
 const unsigned RADIUS = 9;
 const std::string ELEC_TYPE = "electron";
 const std::string PROT_TYPE = "proton";
+const float MASS_E = 9.1 * pow(10, -31);
+const float MASS_P = 1.67 * pow(10, -30);
 
 struct PointCharge {
   float charge;
   sf::CircleShape circle;
+  std::string particle;
+  sf::Vector2f velocity;
 
   PointCharge(sf::Vector2f pos, std::string type){
+    particle = type;
+    velocity = sf::Vector2f(0,0);
+
     if(type == ELEC_TYPE){
       charge = -e;
       circle.setFillColor(sf::Color::Red);
@@ -75,6 +83,18 @@ struct Button{
     buttonText.setPosition(sf::Vector2f(rect.getPosition().x + deltaX, rect.getPosition().y + deltaY));
   }
 
+  void setText(std::string newText){
+    buttonText.setString(newText);
+    
+    //update centering
+    sf::FloatRect textBounds = buttonText.getLocalBounds();
+    float deltaX = rect.getSize().x / 2.0 - textBounds.width / 2.0 - textBounds.left;
+    float deltaY = rect.getSize().y / 2.0 - textBounds.height / 2.0 - textBounds.top;
+    buttonText.setPosition(sf::Vector2f(rect.getPosition().x + deltaX, rect.getPosition().y + deltaY));
+ 
+
+  }
+
 };
 
 // function definitions
@@ -86,12 +106,15 @@ float vecMag(const sf::Vector2f &);
 void lockChargeToMouse(PointCharge* , sf::RenderWindow &, const sf::Event &);
 void drawField(const std::vector<PointCharge *> &, sf::RenderWindow&, Observer&);
 bool isMouseOnButton(const std::vector<Button *> &, const sf::RenderWindow &, std::string &);
-void addCharge(const std::string, std::vector<PointCharge *> &);
+void addCharge(const std::string, std::vector<PointCharge *> &, sf::RenderWindow&);
 void drawArrow(const sf::Vector2f &, const sf::Vector2f &, sf::RenderWindow &, float);
 void handleResize(sf::RenderWindow &, sf::View &);
+void handleMechanics(const std::vector<PointCharge* >&, std::vector<PointCharge* >&, const float timeStep);
+void handleBounds(std::vector<PointCharge *>&, const sf::RenderWindow&);
 
 int main() {
-  std::vector<PointCharge *> allCharges;
+  std::vector<PointCharge *> allStaticCharges;
+  std::vector<PointCharge *> allNonStaticCharges;
   std::vector<Button *> allButtons;
 
   // main window
@@ -108,6 +131,9 @@ int main() {
     return EXIT_FAILURE;
   }
 
+  bool isPlaying = false;
+  bool isPlayMode = false;
+
   sf::RectangleShape topLine(sf::Vector2f(window.getSize().x, 10));
   topLine.setPosition(sf::Vector2f(0,75));
   topLine.setFillColor(sf::Color::White);
@@ -120,13 +146,21 @@ int main() {
 
   //define buttons here
   Button addElecButton(sf::Vector2f(10,10), "Add Electron", font, 13, ELEC_TYPE);
-  Button addProButton(sf::Vector2f(window.getSize().x - 110, 10), "Add Proton", font, 13, PROT_TYPE);
+  Button addProButton(sf::Vector2f(window.getSize().x - 110, 10), "Add Positron", font, 13, PROT_TYPE);
   Button trash(sf::Vector2f(window.getSize().x - 110, window.getSize().y - 60), "Trash", font, 13, "trash");
   Button clearButton(sf::Vector2f(10, window.getSize().y - 60), "Clear", font, 13, "clear"); 
+  Button playPauseButton(sf::Vector2f(0,0), "Play", font, 13, "play pause");
+  Button changeModeButton(sf::Vector2f(0,0), "Test", font, 13, "mode");
+  playPauseButton.setPosition(sf::Vector2f(3*window.getSize().x / 4.0 - playPauseButton.rect.getSize().x / 2.0, 
+                                            window.getSize().y - 60));
+  changeModeButton.setPosition(sf::Vector2f(window.getSize().x / 4.0 - changeModeButton.rect.getSize().x / 2.0, 
+                                            window.getSize().y - 60));
   allButtons.push_back(&addElecButton);
   allButtons.push_back(&addProButton);
   allButtons.push_back(&trash);
   allButtons.push_back(&clearButton);
+  allButtons.push_back(&playPauseButton);
+  allButtons.push_back(&changeModeButton);
 
   Observer obs;
   obs.circle.setFillColor(sf::Color::White);
@@ -143,10 +177,15 @@ int main() {
   PointCharge* chargeCurr = nullptr; 
   std::string buttonTag; 
 
-
-
   // main loop
   while (window.isOpen()) {
+
+    handleBounds(allNonStaticCharges, window);
+
+    if(isPlaying){
+      handleMechanics(allStaticCharges, allNonStaticCharges, float(1.0/30.0));
+    }
+
     // process events
     sf::Event event;
     while (window.pollEvent(event)) {
@@ -165,7 +204,10 @@ int main() {
 
       if (event.type == sf::Event::MouseButtonPressed) {
        
-        if (isMouseOnCharge(allCharges, window, chargeCurr)) {
+        if (!isPlaying && isMouseOnCharge(allStaticCharges, window, chargeCurr)) {
+          clickedCharge = true;
+        }
+        else if(!isPlaying && isMouseOnCharge(allNonStaticCharges, window, chargeCurr)){
           clickedCharge = true;
         }
         else {
@@ -178,24 +220,66 @@ int main() {
         lockChargeToMouse(chargeCurr, window, event);
         if(isMouseOnButton(allButtons, window, buttonTag) && buttonTag == "trash")
         {
-          allCharges.erase(std::find(allCharges.begin(), allCharges.end(), chargeCurr));
-          delete chargeCurr;
-          chargeCurr = nullptr;
-          clickedCharge = false;
-          window.setMouseCursorVisible(true);
+          if(std::find(allStaticCharges.begin(), allStaticCharges.end(), chargeCurr) != allStaticCharges.end()){
+            allStaticCharges.erase(std::find(allStaticCharges.begin(), allStaticCharges.end(), chargeCurr));
+            delete chargeCurr;
+            chargeCurr = nullptr;
+            clickedCharge = false;
+            window.setMouseCursorVisible(true);
+          }
+          else{
+            allNonStaticCharges.erase(std::find(allNonStaticCharges.begin(), allNonStaticCharges.end(), chargeCurr));
+            delete chargeCurr;
+            chargeCurr = nullptr;
+            clickedCharge = false;
+            window.setMouseCursorVisible(true);
+          }
+
         }
       }
       else if(clickedButton){
-        if(buttonTag == ELEC_TYPE || buttonTag == PROT_TYPE){
-          addCharge(buttonTag, allCharges);
+        if(!isPlayMode && (buttonTag == ELEC_TYPE || buttonTag == PROT_TYPE)){
+          addCharge(buttonTag, allStaticCharges, window);
+          chargeCurr = allStaticCharges.back();
+          clickedCharge = true;
+        }
+        else if(!isPlaying && isPlayMode && (buttonTag == ELEC_TYPE || buttonTag == PROT_TYPE)){
+          addCharge(buttonTag, allNonStaticCharges, window);
+          chargeCurr = allNonStaticCharges.back();
+          clickedCharge = true;
         }
         else if(buttonTag == "clear"){
-          for(auto i : allCharges){
+          for(auto i : allStaticCharges){
+            delete i;
+          }
+          for(auto i : allNonStaticCharges){
             delete i;
           }
 
-          allCharges.clear();
+          allStaticCharges.clear();
+          allNonStaticCharges.clear();
         }
+        else if(buttonTag == "play pause"){
+          isPlaying = !isPlaying;
+
+          if(isPlaying){
+            playPauseButton.setText("Pause");
+          }
+          else{
+            playPauseButton.setText("Play");
+          }
+        }
+        else if(buttonTag == "mode"){
+          isPlayMode = !isPlayMode;
+          if(isPlayMode){
+            changeModeButton.setText("Configure");
+          }
+          else{
+            changeModeButton.setText("Test");
+          }
+ 
+        }
+
       }
 
       if(event.type == sf::Event::Resized){
@@ -204,6 +288,10 @@ int main() {
         trash.setPosition(sf::Vector2f(window.getSize().x - 110, window.getSize().y - 60));
 
         clearButton.setPosition(sf::Vector2f(10, window.getSize().y - 60));
+
+        playPauseButton.setPosition(sf::Vector2f(3*window.getSize().x / 4.0 - playPauseButton.rect.getSize().x / 2.0, 
+                                    window.getSize().y - 60));
+        changeModeButton.setPosition(sf::Vector2f(window.getSize().x / 4.0 - changeModeButton.rect.getSize().x / 2.0,                                      window.getSize().y - 60));
       }
     }
 
@@ -216,7 +304,7 @@ int main() {
 
     window.draw(topLine);
     //update field every frame
-    drawField(allCharges, window, obs);
+    drawField(allStaticCharges, window, obs);
 
     for(auto i : allButtons)
     {
@@ -224,8 +312,12 @@ int main() {
     }
 
     //draw all charges every frame
-    for(auto i : allCharges)
+    for(auto i : allStaticCharges)
     {
+      window.draw(i->circle);
+    }
+
+    for(auto i : allNonStaticCharges){
       window.draw(i->circle);
     }
 
@@ -373,15 +465,15 @@ bool isMouseOnButton(const std::vector<Button *> & but, const sf::RenderWindow &
   return false;
 }
 
-void addCharge(const std::string chargeTag, std::vector<PointCharge *> &pc){
+void addCharge(const std::string chargeTag, std::vector<PointCharge *> &pc, sf::RenderWindow& win){
   
   if(chargeTag == ELEC_TYPE)
   {
-    PointCharge* elec = new PointCharge(sf::Vector2f(10, 80), ELEC_TYPE);
+    PointCharge* elec = new PointCharge(sf::Vector2f(10, 85), ELEC_TYPE);
     pc.push_back(elec);
   }
   else if(chargeTag == PROT_TYPE){
-    PointCharge* prot = new PointCharge(sf::Vector2f(890,80), PROT_TYPE);
+    PointCharge* prot = new PointCharge(sf::Vector2f(890,85), PROT_TYPE);
     pc.push_back(prot);
   }
 }
@@ -434,4 +526,41 @@ void handleResize(sf::RenderWindow& win, sf::View& view){
   view.setCenter(currWinSize.x / 2.0, currWinSize.y / 2.0);
   
   win.setView(view);
+}
+
+
+void handleMechanics(const std::vector<PointCharge* >& staticCharges, std::vector<PointCharge* >& movingCharges, 
+                     const float timeStep){
+  sf::Vector2f force; 
+  sf::Vector2f acc; 
+  sf::Vector2f field;
+  Observer obs;
+  float strength;
+
+  for(auto i : movingCharges){
+    obs.circle.setPosition(i->circle.getPosition());
+    field = fieldCalc(staticCharges, obs, strength);
+    force = i->charge * field * float(1000.0); 
+    if(i->particle == ELEC_TYPE){
+      acc = force / MASS_E;
+    }
+    else if(i->particle == PROT_TYPE){
+      acc = force / MASS_P;
+    }
+
+    i->velocity = i->velocity + acc * timeStep;
+
+    i->circle.setPosition(i->circle.getPosition() + i->velocity * timeStep + acc * float(0.5 * pow(timeStep, 2)));
+  }
+}
+
+void handleBounds(std::vector<PointCharge *>& pc, const sf::RenderWindow& win){
+  bool isOutOfBounds;
+  for(auto i : pc){
+    isOutOfBounds = i->circle.getPosition().x < 0 || i->circle.getPosition().x > win.getSize().x ||
+                     i->circle.getPosition().y < 80 || i->circle.getPosition().y > win.getSize().y;
+    if(isOutOfBounds){
+      i->velocity = sf::Vector2f(-i->velocity.y, i->velocity.x);
+    }
+  }
 }
