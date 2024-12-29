@@ -48,20 +48,20 @@ struct Button{
   std::string tag;
 
   //constructor
-  Button(const sf::Vector2f& pos, const std::string& text, const sf::Font& font, float fontSize, std::string t){
+  Button(const sf::Vector2f& pos, const std::string& text, const sf::Font& font, float fontSize, std::string t)
+    : buttonText(font, text, fontSize)
+  {
     tag = t;
+    buttonText.setFillColor(sf::Color::Black);
     rect = sf::RectangleShape(sf::Vector2f(100, 40));
     rect.setPosition(pos);
     rect.setFillColor(sf::Color::Green);
-    buttonText = sf::Text(text, font);
-    buttonText.setCharacterSize(fontSize);
-    buttonText.setFillColor(sf::Color::Black);
 
     sf::FloatRect textBounds = buttonText.getLocalBounds();
 
     //automatically fit text to button
-    float deltaX = rect.getSize().x / 2.0 - textBounds.width / 2.0 - textBounds.left;
-    float deltaY = rect.getSize().y / 2.0 - textBounds.height / 2.0 - textBounds.top;
+    float deltaX = rect.getSize().x / 2.0 - textBounds.size.x / 2.f - textBounds.position.x;
+    float deltaY = rect.getSize().y / 2.0 - textBounds.size.y / 2.f - textBounds.position.y;
 
     buttonText.setPosition(sf::Vector2f(rect.getPosition().x + deltaX, rect.getPosition().y + deltaY));
   }
@@ -77,8 +77,8 @@ struct Button{
     sf::FloatRect textBounds = buttonText.getLocalBounds();
 
     //automatically fit text to button
-    float deltaX = rect.getSize().x / 2.0 - textBounds.width / 2.0 - textBounds.left;
-    float deltaY = rect.getSize().y / 2.0 - textBounds.height / 2.0 - textBounds.top;
+    float deltaX = rect.getSize().x / 2.0 - textBounds.size.x / 2.0 - textBounds.position.x;
+    float deltaY = rect.getSize().y / 2.0 - textBounds.size.y / 2.0 - textBounds.position.y;
 
     buttonText.setPosition(sf::Vector2f(rect.getPosition().x + deltaX, rect.getPosition().y + deltaY));
   }
@@ -88,8 +88,8 @@ struct Button{
     
     //update centering
     sf::FloatRect textBounds = buttonText.getLocalBounds();
-    float deltaX = rect.getSize().x / 2.0 - textBounds.width / 2.0 - textBounds.left;
-    float deltaY = rect.getSize().y / 2.0 - textBounds.height / 2.0 - textBounds.top;
+    float deltaX = rect.getSize().x / 2.0 - textBounds.size.x / 2.0 - textBounds.position.x;
+    float deltaY = rect.getSize().y / 2.0 - textBounds.size.y / 2.0 - textBounds.position.y;
     buttonText.setPosition(sf::Vector2f(rect.getPosition().x + deltaX, rect.getPosition().y + deltaY));
   }
 };
@@ -100,7 +100,7 @@ void normalizeVec(sf::Vector2f&);
 sf::Vector2f getCircleMid(const sf::CircleShape &);
 bool isMouseOnCharge(const std::vector<PointCharge*> &, const sf::RenderWindow &, PointCharge*&);
 float vecMag(const sf::Vector2f &);
-void lockChargeToMouse(PointCharge* , sf::RenderWindow &, const sf::Event &);
+void lockChargeToMouse(PointCharge* , sf::RenderWindow &, const std::optional<sf::Event>&);
 void drawField(const std::vector<PointCharge *> &, sf::RenderWindow&, Observer&);
 bool isMouseOnButton(const std::vector<Button *> &, const sf::RenderWindow &, std::string &);
 void addCharge(const std::string, std::vector<PointCharge *> &, sf::RenderWindow&);
@@ -116,18 +116,13 @@ int main() {
   std::vector<Button *> allButtons;
 
   // main window
-  sf::RenderWindow window(sf::VideoMode(1920, 1080), "My Window");
+  sf::RenderWindow window(sf::VideoMode({1920, 1080}), "My Window");
 
   sf::View view;
-  view.setSize(window.getSize().x, window.getSize().y);
-  view.setCenter(window.getSize().x / 2.0, window.getSize().y / 2.0);
+  view.setSize({float(window.getSize().x), float(window.getSize().y)});
+  view.setCenter({window.getSize().x / 2.f, window.getSize().y / 2.f});
   window.setView(view);
 
-  sf::Font font;
-
-  if (!font.loadFromFile("../fonts/toxi.otf")) {
-    return EXIT_FAILURE;
-  }
 
   bool isPlaying = false;
   bool isPlayMode = false;
@@ -136,11 +131,13 @@ int main() {
   topLine.setPosition(sf::Vector2f(0,75));
   topLine.setFillColor(sf::Color::White);
 
+  const sf::Font font("../fonts/toxi.otf");
+
   // title text
-  sf::Text text("Electric Field Simulator", font, 50);
+  sf::Text text(font, "Electric Field Simulator", 50);
   sf::Rect textBounds = text.getLocalBounds();
-  float textMidToScreenMid = window.getSize().x / 2.0 - textBounds.width / 2.0;
-  text.setPosition(textMidToScreenMid, 10);
+  float textMidToScreenMid = window.getSize().x / 2.0 - textBounds.size.x / 2.0;
+  text.setPosition({textMidToScreenMid, 10});
 
   //define buttons here
   Button addElecButton(sf::Vector2f(10,10), "Add Electron", font, 13, ELEC_TYPE);
@@ -162,10 +159,10 @@ int main() {
 
   Observer obs;
   obs.circle.setFillColor(sf::Color::White);
-  obs.circle.setPosition(100, 300);
+  obs.circle.setPosition({100, 300});
 
   //top line
-  sf::VertexArray line(sf::Lines, 2);
+  sf::VertexArray line(sf::PrimitiveType::Lines, 2);
 
   // boolean variables
   bool clickedCharge = false;
@@ -187,14 +184,13 @@ int main() {
     }
 
     // process events
-    sf::Event event;
-    while (window.pollEvent(event)) {
-      if (event.type == sf::Event::Closed) {
+    while (std::optional event = window.pollEvent()) {
+      if (event->is<sf::Event::Closed>()) {
         window.close();
       }
 
       if(isMouseOnButton(allButtons, window, buttonTag)){
-        if(event.type == sf::Event::MouseButtonPressed){
+        if(event->is<sf::Event::MouseButtonPressed>()){
           clickedButton = true;
         }
         else{
@@ -202,7 +198,7 @@ int main() {
         }
       }
 
-      if (event.type == sf::Event::MouseButtonPressed) {
+      if (event->is<sf::Event::MouseButtonPressed>()) {
        
         if (!isPlaying && isMouseOnCharge(allStaticCharges, window, chargeCurr)) {
           clickedCharge = true;
@@ -304,7 +300,7 @@ int main() {
       }
 
       //handle resizing the screen
-      if(event.type == sf::Event::Resized){
+      if(event->is<sf::Event::Resized>()){
         handleResize(window, view);
 
         trash.setPosition(sf::Vector2f(window.getSize().x - 110, window.getSize().y - 60));
@@ -318,7 +314,6 @@ int main() {
     }
 
     // update screen
-    window.setActive();
     window.clear();
 
     //draw text
@@ -370,6 +365,10 @@ sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc, const Observer &obs
 
     float dist = sqrt(pow(x_dist, 2) + pow(y_dist, 2));
 
+    if(dist == 0){
+      dist += 0.00001;
+    }
+
     sf::Vector2f unit = getCircleMid(obs.circle) - getCircleMid(i->circle);
     normalizeVec(unit);
 
@@ -386,6 +385,11 @@ sf::Vector2f fieldCalc(const std::vector<PointCharge *> &pc, const Observer &obs
 // turns passed in vector normal
 void normalizeVec(sf::Vector2f &vec) {
   float vecMag = sqrt(pow(vec.x, 2) + pow(vec.y, 2));
+
+  if(vec == sf::Vector2f(0,0)){
+    return;
+  }
+
   vec /= vecMag;
 }
 
@@ -420,13 +424,13 @@ bool isMouseOnCharge(const std::vector<PointCharge*> &pc, const sf::RenderWindow
   return false;
 }
 
-void lockChargeToMouse(PointCharge* charge, sf::RenderWindow &window, const sf::Event &event) {
+void lockChargeToMouse(PointCharge* charge, sf::RenderWindow &window, const std::optional<sf::Event>& event) {
   window.setMouseCursorVisible(false);
-  if (event.type == sf::Event::MouseMoved) {
+  if (event->is<sf::Event::MouseMoved>()) {
     charge->circle.setPosition(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
 
     if(charge->circle.getPosition().y < 80 + RADIUS){
-      charge->circle.setPosition(charge->circle.getPosition().x, 80 + RADIUS);
+      charge->circle.setPosition({charge->circle.getPosition().x, 80 + RADIUS});
     }
   }
 }
@@ -474,11 +478,11 @@ bool isMouseOnButton(const std::vector<Button *> & but, const sf::RenderWindow &
   for(auto i : but){
     sf::FloatRect bound = i->rect.getGlobalBounds();
 
-    float x1 = bound.left;
-    float x2 = bound.left + bound.width;
+    float x1 = bound.position.x;
+    float x2 = bound.position.x + bound.size.x;
 
-    float y1 = bound.top;
-    float y2 = bound.top + bound.height;
+    float y1 = bound.position.y;
+    float y2 = bound.position.y + bound.size.y;
 
     bool inX = mousePos.x > x1 && mousePos.x < x2;
     bool inY = mousePos.y > y1 && mousePos.y < y2;
@@ -511,7 +515,7 @@ void addCharge(const std::string chargeTag, std::vector<PointCharge *> &pc, sf::
 void drawArrow(const sf::Vector2f & fPos, const sf::Vector2f & sPos, sf::RenderWindow & win, float alpha){
 
   //make line
-  sf::VertexArray line(sf::Lines, 2);
+  sf::VertexArray line(sf::PrimitiveType::Lines, 2);
 
   line[0].position = fPos;
   line[1].position = sPos;
@@ -529,7 +533,7 @@ void drawArrow(const sf::Vector2f & fPos, const sf::Vector2f & sPos, sf::RenderW
   sf::Vector2f topPoint(sPos + (float(sqrt(3)/2.0 * triSide) * dir));
   
   //define arrow head
-  sf::VertexArray head(sf::Triangles, 3);
+  sf::VertexArray head(sf::PrimitiveType::Triangles, 3);
 
   head[0].position = leftPoint;
   head[1].position = rightPoint;
@@ -552,8 +556,8 @@ void drawArrow(const sf::Vector2f & fPos, const sf::Vector2f & sPos, sf::RenderW
 void handleResize(sf::RenderWindow& win, sf::View& view){
   sf::Vector2u currWinSize = win.getSize();
 
-  view.setSize(currWinSize.x, currWinSize.y);
-  view.setCenter(currWinSize.x / 2.0, currWinSize.y / 2.0);
+  view.setSize({float(currWinSize.x), float(currWinSize.y)});
+  view.setCenter({currWinSize.x / 2.f, currWinSize.y / 2.f});
   
   win.setView(view);
 }
@@ -567,7 +571,7 @@ void handleMechanics(const std::vector<PointCharge* >& staticCharges, std::vecto
   Observer obs;
   float strength;
 
-  sf::VertexArray* path = new sf::VertexArray(sf::Lines, 2);
+  sf::VertexArray* path = new sf::VertexArray(sf::PrimitiveType::Lines, 2);
 
   for(auto i : movingCharges){
     obs.circle.setPosition(i->circle.getPosition());
