@@ -7,7 +7,9 @@ set(CMAKE_BUILD_TYPE DEBUG)
 
 find_package(SFML COMPONENTS System Graphics Window REQUIRED)
 
-set(SFML_STATIC_LIBRARIES true)
+set(SFML_STATIC_LIBRARIES TRUE)
+
+add_definitions(-DSFML_STATIC)
 
 add_executable(main src/main.cpp)
 

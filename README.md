@@ -11,8 +11,9 @@ cmake ..
 
 ## Code to compile and run
 ```
-g++ -std=c++17 main.cpp -I <sfml-path>/include -L <sfml-path>/lib -lsfml-graphics -lsfml-window -lsfml-system -o main"
+//go to build directory in project folder
 
+cmake --build .
 ./main
 ```
 
